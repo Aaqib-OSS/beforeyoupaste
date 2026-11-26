@@ -1,0 +1,113 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>BeforeYouPaste - AamirTechs</title>
+<style>
+:root{--navy:#0b1f3a;--gold:#d4a72c;--bg:#f6f8fb;--ink:#1c2733;--muted:#5b6b7c;--line:#d9e1ea}
+*{box-sizing:border-box}
+body{margin:0;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"Helvetica Neue",Arial,sans-serif;background:var(--bg);color:var(--ink)}
+header{background:var(--navy);color:#fff;padding:28px 20px;border-bottom:4px solid var(--gold)}
+header .wrap{max-width:880px;margin:0 auto}
+header h1{margin:0 0 6px;font-size:1.6rem}
+header p{margin:0;color:#c8d4e4}
+main{max-width:880px;margin:24px auto;padding:0 20px}
+.card{background:#fff;border:1px solid var(--line);border-radius:12px;padding:20px;box-shadow:0 1px 3px rgba(11,31,58,.08)}
+label{display:block;font-weight:600;margin:14px 0 6px}
+.card>label:first-child{margin-top:0}
+textarea{width:100%;min-height:180px;padding:10px;border:1px solid var(--line);border-radius:8px;font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:.85rem}
+.row{display:flex;flex-wrap:wrap;gap:10px;margin-top:16px}
+button{background:var(--navy);color:#fff;border:0;border-radius:8px;padding:10px 18px;font-size:.95rem;cursor:pointer}
+button.alt{background:#fff;color:var(--navy);border:1px solid var(--navy)}
+button.gold{background:var(--gold);color:#0b1f3a;font-weight:600}
+pre{background:#0b1f3a;color:#eef3f9;border-radius:8px;padding:16px;overflow-x:auto;white-space:pre-wrap;word-break:break-word;min-height:60px;font-size:.85rem}
+footer{max-width:880px;margin:0 auto 32px;padding:0 20px;color:var(--muted);font-size:.9rem}
+footer a{color:var(--navy)}
+.hint{color:var(--muted);font-size:.85rem;margin-top:6px;font-weight:400}
+#summary ul{margin:8px 0 0;padding-left:20px}
+#summary li{margin:2px 0}
+.badge{display:inline-block;background:var(--navy);color:#fff;border-radius:999px;padding:1px 9px;font-size:.8rem;margin-left:6px}
+</style>
+</head>
+<body>
+<header><div class="wrap"><h1>BeforeYouPaste</h1><p>Paste into AI chats without handing over the real data. This page runs the extension's real detector engine in your browser: it finds personal data and secrets, then swaps them for placeholders like &lt;EMAIL_1&gt; that the extension can restore later.</p></div></header>
+<main><div class="card">
+<label for="input">Text to scan</label>
+<textarea id="input" spellcheck="false" placeholder="Paste some text here, or load the sample. Nothing you type leaves this page."></textarea>
+<div class="row"><button class="gold" id="scan" type="button">Scan and mask</button><button class="alt" id="sample" type="button">Load sample text</button><button class="alt" id="clear" type="button">Clear</button></div>
+<div id="summary" aria-live="polite"></div>
+<label for="out">Masked output</label>
+<pre id="out">Your masked text will appear here.</pre>
+<div class="row"><button class="alt" id="copy" type="button">Copy masked text</button></div>
+<p class="hint">Everything runs locally in your browser. No text is uploaded, stored, or sent anywhere. The full extension adds a paste warning inside ChatGPT, Claude, Gemini and Perplexity, and restores the real values in the AI reply with one click. <a href="https://github.com/aamirtechs/beforeyoupaste#install-load-unpacked">Install instructions are in the README</a>.</p>
+</div></main>
+<footer>
+<p>Built by AamirTechs. <a href="https://aamirtechs.github.io/">All tools</a> | <a href="https://github.com/aamirtechs/beforeyoupaste">Source</a></p>
+<p>Privacy: this tool runs 100% in your browser, nothing is uploaded.</p>
+</footer>
+<script src="src/detectors.js"></script>
+<script>
+var SAMPLE = [
+  "Hi team, please update the customer record for Jane Doe.",
+  "Email: jane.doe@example.com",
+  "Phone: (212) 555-0147",
+  "Date of birth: 14 March 1990",
+  "SSN: 123-45-6789",
+  "Card on file: 4242 4242 4242 4242",
+  "IBAN: GB29 NWBK 6016 1331 9268 19",
+  "Aadhaar: 999941057058",
+  "Thanks!"
+].join("\n");
+var inputEl = document.getElementById("input");
+var outEl = document.getElementById("out");
+var summaryEl = document.getElementById("summary");
+var lastMasked = "";
+function labelFor(finding, D) {
+  if (finding.label) return finding.label;
+  return (D.TYPE_LABELS && D.TYPE_LABELS[finding.type]) || finding.type;
+}
+function runScan() {
+  var D = window.BeforeYouPasteDetectors;
+  if (!D) {
+    summaryEl.innerHTML = "<p>Detector engine failed to load.</p>";
+    return;
+  }
+  var text = inputEl.value;
+  var findings = D.detect(text);
+  var masked = D.mask(text);
+  lastMasked = masked.text;
+  outEl.textContent = findings.length ? masked.text : (text ? text : "Your masked text will appear here.");
+  if (!findings.length) {
+    summaryEl.innerHTML = "<p>No sensitive data found." + (text ? "" : " Paste some text or load the sample first.") + "</p>";
+    return;
+  }
+  var counts = {};
+  var order = [];
+  findings.forEach(function (f) {
+    var label = labelFor(f, D);
+    if (!(label in counts)) { counts[label] = 0; order.push(label); }
+    counts[label]++;
+  });
+  var items = order.map(function (label) {
+    return "<li>" + label + "<span class=\"badge\">" + counts[label] + "</span></li>";
+  }).join("");
+  summaryEl.innerHTML = "<label style=\"margin-top:16px\">Findings: " + findings.length + " item" + (findings.length === 1 ? "" : "s") + " masked</label><ul>" + items + "</ul>";
+}
+document.getElementById("sample").addEventListener("click", function () { inputEl.value = SAMPLE; runScan(); });
+document.getElementById("clear").addEventListener("click", function () {
+  inputEl.value = "";
+  lastMasked = "";
+  summaryEl.innerHTML = "";
+  outEl.textContent = "Your masked text will appear here.";
+});
+document.getElementById("scan").addEventListener("click", runScan);
+document.getElementById("copy").addEventListener("click", function () {
+  var text = lastMasked || outEl.textContent;
+  if (navigator.clipboard && navigator.clipboard.writeText) {
+    navigator.clipboard.writeText(text);
+  }
+});
+</script>
+</body>
+</html>
